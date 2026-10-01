@@ -24,6 +24,8 @@ The `CFLAGS` setting addresses the legacy C-extension compiler error encountered
 
 Open `dpate172.ipynb` with this environment and run all cells. Leave `REFRESH_FROM_API = False` for offline verification of the packaged results. Text is read literally, including blank messages and values such as `NA`; available `time` values are integer author Unix seconds, and unavailable timestamps are empty. Notebook tables convert observed timestamps to UTC.
 
+Part 2 adds columns to the shared project statistics CSV. Part 1 checks the values and checksum of its original eight columns, so those additions do not break verification. Running Part 1 collection again replaces the shared statistics with its eight-column export; rerun `dpate172_vis.ipynb` afterward to rebuild Part 2. The original Part 1 statistics are also kept in `data/dpate172_part1_stats.csv`.
+
 The notebook verifies all ten assignments, exact equality with saved WoC lists after documented exclusions of verified non-commit tags, zero duplicate/missing/extra candidate-identifier pairs, available metadata against its source cache, and blank metadata only for explicitly documented unavailable objects. It recomputes per-project candidate/available/unavailable counts, observed author/time statistics, and the summary CSV SHA-256. If `data/dpate172_git_objects.zip` is present, it also recomputes Git SHA-1 and raw SHA-256 for recovered commit objects and each tag in an exclusion's chain, checks exact object/type target headers, and verifies that the chain ends at the documented commit. These checks run without network access.
 
 ## Collecting or resuming data

@@ -10,6 +10,7 @@ import ast
 import csv
 from datetime import datetime, timezone
 import hashlib
+import io
 import json
 from pathlib import Path
 import re
@@ -28,12 +29,27 @@ def read_json(path):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def read_csv(path, columns):
+def read_csv(path, columns, *, allow_extra_columns=False):
     # csv.DictReader preserves empty strings and literal NA/NaN commit messages.
     with path.open(newline="", encoding="utf-8") as handle:
         reader = csv.DictReader(handle, delimiter=";")
-        assert reader.fieldnames == columns, f"Unexpected header: {path}"
+        actual_columns = reader.fieldnames or []
+        if allow_extra_columns:
+            assert actual_columns[:len(columns)] == columns, f"Unexpected header: {path}"
+            assert len(actual_columns) == len(set(actual_columns)), f"Duplicate columns: {path}"
+        else:
+            assert actual_columns == columns, f"Unexpected header: {path}"
         return list(reader)
+
+
+def part1_stats_sha256(rows):
+    """Hash the original Part 1 columns while allowing later parts to add columns."""
+    output = io.StringIO(newline="")
+    writer = csv.DictWriter(output, fieldnames=STATS_COLUMNS, delimiter=";",
+                            lineterminator="\n", extrasaction="ignore")
+    writer.writeheader()
+    writer.writerows(rows)
+    return hashlib.sha256(output.getvalue().encode("utf-8")).hexdigest()
 
 
 def cache_records(path):
@@ -134,7 +150,7 @@ def load_and_check(root):
         assert int(row["time"]) == record["time"]
         assert row["author"] == record["author"]
         assert row["commit message"] == record["commit message"]
-    stats_rows = read_csv(stats_path, STATS_COLUMNS)
+    stats_rows = read_csv(stats_path, STATS_COLUMNS, allow_extra_columns=True)
     assert len(stats_rows) == 10
     stats = {row["Project"]: row for row in stats_rows}
     assert set(stats) == set(projects)
@@ -175,7 +191,7 @@ def load_and_check(root):
             "summary_rows": len(rows), "unique_hashes": len(required_hashes),
             "raw_pairs": raw_pairs, "excluded_pairs": excluded_pairs, "exclusions": exclusions,
             "missing_hashes": missing_hashes, "unavailable": unavailable, "research": research,
-            "stats_digest": hashlib.sha256(stats_path.read_bytes()).hexdigest(),
+            "stats_digest": part1_stats_sha256(stats_rows),
             "github_digest": hashlib.sha256((data / f"{NETID}_github_metadata.json").read_bytes()).hexdigest()}
 
 
@@ -204,7 +220,8 @@ with Path(f"{NETID}_project_summary.csv").open(newline="", encoding="utf-8") as 
     rows = list(reader)
 with Path(f"{NETID}_project_stats.csv").open(newline="", encoding="utf-8") as handle:
     reader = csv.DictReader(handle, delimiter=";")
-    assert reader.fieldnames == STATS_COLUMNS
+    assert (reader.fieldnames or [])[:len(STATS_COLUMNS)] == STATS_COLUMNS
+    assert len(reader.fieldnames) == len(set(reader.fieldnames))
     stats_rows = list(reader)
 
 projects = assigned_projects()
@@ -331,7 +348,14 @@ assert saved_report["woc_commit_objects"] + saved_report["git_recovered_commit_o
 assert summary_sha256 == EXPECTED_SUMMARY_SHA256, (
     "The data changed. Rebuild the notebook with scripts/build_notebook.py to update its Markdown results."
 )
-assert hashlib.sha256(Path(f"{NETID}_project_stats.csv").read_bytes()).hexdigest() == EXPECTED_STATS_SHA256, (
+# Later parts append columns to this shared file; verify the original Part 1 data.
+import io
+part1_stats_csv = io.StringIO(newline="")
+part1_writer = csv.DictWriter(part1_stats_csv, fieldnames=STATS_COLUMNS, delimiter=";",
+                             lineterminator="\n", extrasaction="ignore")
+part1_writer.writeheader()
+part1_writer.writerows(stats_rows)
+assert hashlib.sha256(part1_stats_csv.getvalue().encode("utf-8")).hexdigest() == EXPECTED_STATS_SHA256, (
     "Project statistics changed. Rebuild the notebook to update its Markdown results."
 )
 assert hashlib.sha256((DATA / f"{NETID}_github_metadata.json").read_bytes()).hexdigest() == EXPECTED_GITHUB_SHA256, (
