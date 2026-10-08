@@ -27,6 +27,8 @@ ROOT = Path(__file__).resolve().parents[1] if "__file__" in globals() else Path.
 PART1_COLUMNS = ["Project", "ncommits", "nauthors", "from", "to", "nstars", "nforks", "lastGHCommitDate"]
 PART2_COLUMNS = ["LongestGapStart", "LongestGapEnd", "LongestGapLength",
                  "NumCommitsAfterLastGap", "ActivityPattern", "NumberOfGapsInTimeline"]
+PART3_COLUMNS = ["BeforeThemes", "AfterThemes", "HypothesizedGapReason", "HasRecovered",
+                 "WhyRecovered", "WhoRecovered", "Currentstatus", "RecentThemes", "Notes"]
 SUMMARY_COLUMNS = ["project_wocid", "commit_sha1", "author", "time", "commit message"]
 MONTHLY_COLUMNS = ["Month", "#Commits"]
 PATTERNS = {"steady", "rising", "declining", "U-shaped", "cyclical", "irregular"}
@@ -57,7 +59,8 @@ def load_part1_data(summary_path, stats_path):
     if columns != SUMMARY_COLUMNS:
         raise ValueError(f"Unexpected summary columns: {columns}")
     stats_columns, stats = read_csv(stats_path)
-    if stats_columns not in (PART1_COLUMNS, PART1_COLUMNS + PART2_COLUMNS):
+    if stats_columns not in (PART1_COLUMNS, PART1_COLUMNS + PART2_COLUMNS,
+                            PART1_COLUMNS + PART2_COLUMNS + PART3_COLUMNS):
         raise ValueError(f"Unexpected stats columns: {stats_columns}")
     base_stats = [{column: row[column] for column in PART1_COLUMNS} for row in stats]
     projects = [row["Project"] for row in base_stats]
@@ -231,7 +234,7 @@ def save_timeseries_and_plots(series, output_dir, netid="dpate172", omission_rep
 
 
 def append_part2_stats(base_stats, gap_metrics, interpretations, stats_path, snapshot_path):
-    """Preserve Part 1 values and append calculated metrics plus reviewed labels."""
+    """Preserve later analysis only when its Part 1 and Part 2 inputs are unchanged."""
     projects = [row["Project"] for row in base_stats]
     if set(interpretations) != set(projects) or set(gap_metrics) != set(projects):
         raise ValueError("Interpretations and gap metrics must cover exactly the ten projects")
@@ -244,8 +247,20 @@ def append_part2_stats(base_stats, gap_metrics, interpretations, stats_path, sna
             raise ValueError(f"Invalid reviewed ActivityPattern for {project}: {pattern!r}")
         rows.append({**original, **gap_metrics[project], "ActivityPattern": pattern})
     stats_path, snapshot_path = Path(stats_path), Path(snapshot_path)
+    columns, current = read_csv(stats_path)
+    output_columns = PART1_COLUMNS + PART2_COLUMNS
+    if columns == output_columns + PART3_COLUMNS:
+        calculated = [{column: str(row[column]) for column in output_columns} for row in rows]
+        saved = [{column: row[column] for column in output_columns} for row in current]
+        if calculated != saved:
+            raise ValueError("Part 1 or Part 2 values changed; review and regenerate Part 3 "
+                             "before replacing its saved analysis")
+        rows = [{**row, **{column: saved_row[column] for column in PART3_COLUMNS}}
+                for row, saved_row in zip(rows, current)]
+        output_columns += PART3_COLUMNS
+    elif columns not in (PART1_COLUMNS, output_columns):
+        raise ValueError(f"Unexpected stats columns: {columns}")
     if not snapshot_path.exists():
-        columns, current = read_csv(stats_path)
         if columns != PART1_COLUMNS or current != base_stats:
             raise ValueError("An original eight-column stats file is required to create the first snapshot")
         snapshot_path.parent.mkdir(parents=True, exist_ok=True)
@@ -253,10 +268,11 @@ def append_part2_stats(base_stats, gap_metrics, interpretations, stats_path, sna
     columns, original = read_csv(snapshot_path)
     if columns != PART1_COLUMNS or original != base_stats:
         raise ValueError("The preserved Part 1 stats snapshot does not match the current baseline")
-    write_csv(stats_path, PART1_COLUMNS + PART2_COLUMNS, rows)
+    write_csv(stats_path, output_columns, rows)
     columns, restored = read_csv(stats_path)
-    assert columns == PART1_COLUMNS + PART2_COLUMNS
+    assert columns == output_columns
     assert [{column: row[column] for column in PART1_COLUMNS} for row in restored] == base_stats
+    assert restored == [{column: str(row[column]) for column in output_columns} for row in rows]
     return rows
 
 

@@ -141,9 +141,12 @@ def build():
     - `dpate172_timeseries_<WOCProjectID>.png`: one 320-DPI plot per project.
     - [dpate172_project_stats.csv](dpate172_project_stats.csv): Part 1 values plus the six Part 2 columns.
 
-    Running this notebook regenerates the Part 2 files. If Part 1 is collected again,
-    rerun Part 2 afterward. A changed Part 1 baseline also needs a reviewed replacement
-    for `data/dpate172_part1_stats.csv`, which keeps the original statistics.
+    Running this notebook regenerates the Part 2 files. Existing Part 3 columns are
+    preserved only when the first fourteen statistics columns are unchanged.
+    Otherwise, it stops so outdated Part 3 explanations are not kept.
+    If Part 1 is collected again, review and rerun the later parts. A changed Part 1
+    baseline also needs a reviewed replacement for `data/dpate172_part1_stats.csv`,
+    which keeps the original statistics.
     """, "saved-files")
     notebook = nbformat.v4.new_notebook(cells=cells, metadata={
         "kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"},
